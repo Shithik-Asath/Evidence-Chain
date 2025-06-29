@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
-import { Upload, File } from 'lucide-react';
+import { Upload, File, Plus, Search, Calendar, Hash, User } from 'lucide-react';
 import { motion } from 'framer-motion';
-import type { Evidence } from '../types';
+import { useEvidence } from '../hooks/useEvidence';
+import { useCases } from '../hooks/useCases';
+import { connectWallet, signMessage } from '../utils/web3';
 
 export default function Dashboard() {
-  const [publicKey, setPublicKey] = useState('');
-  const [caseId, setCaseId] = useState('');
-  const [evidenceList, setEvidenceList] = useState<Evidence[]>([]);
-  const [showForm, setShowForm] = useState(false);
+  const { evidence, loading: evidenceLoading, submitEvidence } = useEvidence();
+  const { cases, loading: casesLoading, createCase } = useCases();
+  const [activeTab, setActiveTab] = useState<'evidence' | 'cases'>('evidence');
+  const [showEvidenceForm, setShowEvidenceForm] = useState(false);
+  const [showCaseForm, setShowCaseForm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [newEvidence, setNewEvidence] = useState({
     name: '',
@@ -16,138 +20,397 @@ export default function Dashboard() {
     file: null as File | null,
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const [newCase, setNewCase] = useState({
+    case_number: '',
+    title: '',
+    description: '',
+  });
+
+  const handleEvidenceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const mockEvidence: Evidence = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: newEvidence.name,
-      description: newEvidence.description,
-      type: newEvidence.type as 'document' | 'audio' | 'video',
-      ipfsHash: 'QmX7b5w9Rj5k5S4v6J8n5t5Z5Y5Z5Y5Z5Y5Z5Y5Z5Y5Y5',
-      timestamp: new Date().toISOString(),
-      transactionHash: '0x123...abc',
-    };
-    setEvidenceList([...evidenceList, mockEvidence]);
-    setShowForm(false);
-    setNewEvidence({ name: '', description: '', type: 'document', file: null });
+    setIsSubmitting(true);
+
+    try {
+      // Connect wallet
+      const walletAddress = await connectWallet();
+      
+      // Create mock IPFS hash (in production, upload to IPFS first)
+      const mockIpfsHash = `Qm${Math.random().toString(36).substr(2, 44)}`;
+      
+      // Sign message for verification
+      const message = `Submit evidence: ${mockIpfsHash}`;
+      const signature = await signMessage(message);
+      
+      // Create mock transaction hash (in production, submit to blockchain)
+      const mockTxHash = `0x${Math.random().toString(16).substr(2, 64)}`;
+
+      // Submit to database
+      await submitEvidence({
+        ipfs_hash: mockIpfsHash,
+        metadata: {
+          name: newEvidence.name,
+          description: newEvidence.description,
+          type: newEvidence.type,
+          fileName: newEvidence.file?.name,
+          fileSize: newEvidence.file?.size,
+          signature
+        },
+        submitter_address: walletAddress,
+        transaction_hash: mockTxHash
+      });
+
+      // Reset form
+      setNewEvidence({ name: '', description: '', type: 'document', file: null });
+      setShowEvidenceForm(false);
+      
+      alert('Evidence submitted successfully!');
+    } catch (error) {
+      console.error('Error submitting evidence:', error);
+      alert('Failed to submit evidence. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCaseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      await createCase(newCase);
+      setNewCase({ case_number: '', title: '', description: '' });
+      setShowCaseForm(false);
+      alert('Case created successfully!');
+    } catch (error) {
+      console.error('Error creating case:', error);
+      alert('Failed to create case. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <div className="py-10">
+    <div className="py-10 min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="bg-white rounded-lg shadow-lg p-6 mb-8"
         >
-          <h2 className="text-2xl font-bold mb-6">Evidence Dashboard</h2>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Evidence Chain Dashboard</h1>
+          <p className="text-gray-600">Manage evidence records and cases securely on the blockchain</p>
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-white rounded-lg shadow-lg p-6"
-            >
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-semibold">Evidence List</h3>
-                <button
-                  onClick={() => setShowForm(true)}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-                >
-                  Add Evidence
-                </button>
-              </div>
-              <ul className="space-y-4">
-                {evidenceList.map((evidence) => (
-                  <li key={evidence.id} className="border p-4 rounded-lg shadow-sm">
-                    <h4 className="font-bold">{evidence.name}</h4>
-                    <p>{evidence.description}</p>
-                    <p className="text-sm text-gray-500">Type: {evidence.type}</p>
-                    <p className="text-sm text-gray-500">IPFS Hash: {evidence.ipfsHash}</p>
-                    <p className="text-sm text-gray-500">Transaction: {evidence.transactionHash}</p>
-                    <p className="text-sm text-gray-500">Timestamp: {new Date(evidence.timestamp).toLocaleString()}</p>
-                  </li>
-                ))}
-              </ul>
-            </motion.div>
+        {/* Tab Navigation */}
+        <div className="mb-8">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => setActiveTab('evidence')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'evidence'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Evidence Records ({evidence.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('cases')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'cases'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Case Records ({cases.length})
+              </button>
+            </nav>
           </div>
-
-          {showForm && (
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="lg:col-span-1"
-            >
-              <div className="bg-white rounded-lg shadow-lg p-6">
-                <h3 className="text-xl font-semibold mb-6">Add New Evidence</h3>
-                <form onSubmit={handleSubmit}>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-                      <input
-                        type="text"
-                        value={newEvidence.name}
-                        onChange={(e) => setNewEvidence({ ...newEvidence, name: e.target.value })}
-                        className="w-full p-2 border rounded-md"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                      <textarea
-                        value={newEvidence.description}
-                        onChange={(e) => setNewEvidence({ ...newEvidence, description: e.target.value })}
-                        className="w-full p-2 border rounded-md"
-                        rows={3}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-                      <select
-                        value={newEvidence.type}
-                        onChange={(e) => setNewEvidence({ ...newEvidence, type: e.target.value })}
-                        className="w-full p-2 border rounded-md"
-                        required
-                      >
-                        <option value="document">Document</option>
-                        <option value="audio">Audio</option>
-                        <option value="video">Video</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">File Upload</label>
-                      <input
-                        type="file"
-                        className="w-full p-2 border rounded-md"
-                        onChange={(e) => setNewEvidence({ ...newEvidence, file: e.target.files?.[0] || null })}
-                        required
-                      />
-                    </div>
-                    <div className="flex justify-end space-x-4">
-                      <button
-                        type="button"
-                        onClick={() => setShowForm(false)}
-                        className="px-4 py-2 border rounded-md hover:bg-gray-50 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                      >
-                        Submit Evidence
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            </motion.div>
-          )}
         </div>
+
+        {/* Evidence Tab */}
+        {activeTab === 'evidence' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="bg-white rounded-lg shadow-lg p-6"
+              >
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-semibold">Evidence Records</h3>
+                  <button
+                    onClick={() => setShowEvidenceForm(true)}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Evidence
+                  </button>
+                </div>
+
+                {evidenceLoading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-2 text-gray-600">Loading evidence...</p>
+                  </div>
+                ) : evidence.length === 0 ? (
+                  <div className="text-center py-8">
+                    <File className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">No evidence records found</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {evidence.map((item) => (
+                      <div key={item.id} className="border border-gray-200 p-4 rounded-lg hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-lg text-gray-900">
+                              {item.metadata?.name || 'Unnamed Evidence'}
+                            </h4>
+                            <p className="text-gray-600 mt-1">
+                              {item.metadata?.description || 'No description provided'}
+                            </p>
+                            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-500">
+                              <div className="flex items-center gap-1">
+                                <Hash className="h-4 w-4" />
+                                <span>IPFS: {item.ipfs_hash.substring(0, 20)}...</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <User className="h-4 w-4" />
+                                <span>Submitter: {item.submitter_address.substring(0, 10)}...</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Calendar className="h-4 w-4" />
+                                <span>
+                                  {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Unknown date'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <File className="h-4 w-4" />
+                                <span>Type: {item.metadata?.type || 'Unknown'}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            </div>
+
+            {/* Evidence Form */}
+            {showEvidenceForm && (
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="lg:col-span-1"
+              >
+                <div className="bg-white rounded-lg shadow-lg p-6">
+                  <h3 className="text-xl font-semibold mb-6">Add New Evidence</h3>
+                  <form onSubmit={handleEvidenceSubmit}>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                        <input
+                          type="text"
+                          value={newEvidence.name}
+                          onChange={(e) => setNewEvidence({ ...newEvidence, name: e.target.value })}
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                        <textarea
+                          value={newEvidence.description}
+                          onChange={(e) => setNewEvidence({ ...newEvidence, description: e.target.value })}
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          rows={3}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
+                        <select
+                          value={newEvidence.type}
+                          onChange={(e) => setNewEvidence({ ...newEvidence, type: e.target.value })}
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        >
+                          <option value="document">Document</option>
+                          <option value="audio">Audio</option>
+                          <option value="video">Video</option>
+                          <option value="image">Image</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">File Upload</label>
+                        <input
+                          type="file"
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          onChange={(e) => setNewEvidence({ ...newEvidence, file: e.target.files?.[0] || null })}
+                          required
+                        />
+                      </div>
+                      <div className="flex justify-end space-x-4 pt-4">
+                        <button
+                          type="button"
+                          onClick={() => setShowEvidenceForm(false)}
+                          className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                          disabled={isSubmitting}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={isSubmitting}
+                        >
+                          {isSubmitting ? 'Submitting...' : 'Submit Evidence'}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </motion.div>
+            )}
+          </div>
+        )}
+
+        {/* Cases Tab */}
+        {activeTab === 'cases' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="bg-white rounded-lg shadow-lg p-6"
+              >
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-semibold">Case Records</h3>
+                  <button
+                    onClick={() => setShowCaseForm(true)}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create Case
+                  </button>
+                </div>
+
+                {casesLoading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-2 text-gray-600">Loading cases...</p>
+                  </div>
+                ) : cases.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">No case records found</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {cases.map((caseItem) => (
+                      <div key={caseItem.id} className="border border-gray-200 p-4 rounded-lg hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                {caseItem.case_number}
+                              </span>
+                            </div>
+                            <h4 className="font-semibold text-lg text-gray-900 mb-1">
+                              {caseItem.title}
+                            </h4>
+                            {caseItem.description && (
+                              <p className="text-gray-600 mb-3">
+                                {caseItem.description}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-1 text-sm text-gray-500">
+                              <Calendar className="h-4 w-4" />
+                              <span>
+                                Created: {caseItem.created_at ? new Date(caseItem.created_at).toLocaleDateString() : 'Unknown date'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            </div>
+
+            {/* Case Form */}
+            {showCaseForm && (
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="lg:col-span-1"
+              >
+                <div className="bg-white rounded-lg shadow-lg p-6">
+                  <h3 className="text-xl font-semibold mb-6">Create New Case</h3>
+                  <form onSubmit={handleCaseSubmit}>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Case Number</label>
+                        <input
+                          type="text"
+                          value={newCase.case_number}
+                          onChange={(e) => setNewCase({ ...newCase, case_number: e.target.value })}
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="e.g., CASE-2024-001"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                        <input
+                          type="text"
+                          value={newCase.title}
+                          onChange={(e) => setNewCase({ ...newCase, title: e.target.value })}
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                        <textarea
+                          value={newCase.description}
+                          onChange={(e) => setNewCase({ ...newCase, description: e.target.value })}
+                          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          rows={4}
+                          placeholder="Describe the case details..."
+                        />
+                      </div>
+                      <div className="flex justify-end space-x-4 pt-4">
+                        <button
+                          type="button"
+                          onClick={() => setShowCaseForm(false)}
+                          className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                          disabled={isSubmitting}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={isSubmitting}
+                        >
+                          {isSubmitting ? 'Creating...' : 'Create Case'}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </motion.div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
