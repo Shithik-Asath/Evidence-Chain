@@ -6,9 +6,9 @@ declare global {
     }
 }
 
-// Ganache configuration
+// Updated Ganache configuration - using chain ID 1337 which is standard for Ganache
 const GANACHE_URL = 'http://127.0.0.1:7545';
-const GANACHE_NETWORK_ID = 5777;
+const GANACHE_NETWORK_ID = 1337; // Changed from 5777 to 1337
 
 export const connectWallet = async (): Promise<string> => {
     if (!window.ethereum) {
@@ -16,16 +16,19 @@ export const connectWallet = async (): Promise<string> => {
     }
 
     try {
-        // Check if we're connected to Ganache
+        // Check current network
         const web3 = new Web3(window.ethereum);
         const networkId = await web3.eth.net.getId();
+        
+        console.log('Current network ID:', networkId);
+        console.log('Expected network ID:', GANACHE_NETWORK_ID);
         
         if (Number(networkId) !== GANACHE_NETWORK_ID) {
             // Try to switch to Ganache network
             try {
                 await window.ethereum.request({
                     method: 'wallet_switchEthereumChain',
-                    params: [{ chainId: `0x${GANACHE_NETWORK_ID.toString(16)}` }],
+                    params: [{ chainId: `0x${GANACHE_NETWORK_ID.toString(16)}` }], // 0x539 for 1337
                 });
             } catch (switchError: any) {
                 // If network doesn't exist, add it
@@ -33,8 +36,8 @@ export const connectWallet = async (): Promise<string> => {
                     await window.ethereum.request({
                         method: 'wallet_addEthereumChain',
                         params: [{
-                            chainId: `0x${GANACHE_NETWORK_ID.toString(16)}`,
-                            chainName: 'Ganache Local',
+                            chainId: `0x${GANACHE_NETWORK_ID.toString(16)}`, // 0x539
+                            chainName: 'Ganache Local Network',
                             nativeCurrency: {
                                 name: 'Ethereum',
                                 symbol: 'ETH',
@@ -44,6 +47,8 @@ export const connectWallet = async (): Promise<string> => {
                             blockExplorerUrls: null
                         }]
                     });
+                } else {
+                    throw switchError;
                 }
             }
         }
