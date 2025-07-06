@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
-import { Upload, File, Plus, Search, Calendar, Hash, User, RefreshCw } from 'lucide-react';
+import { Upload, File, Plus, Search, Calendar, Hash, User, RefreshCw, Eye } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useRealtimeEvidence, useRealtimeCases } from '../hooks/useRealtime';
 import { evidenceService } from '../services/evidenceService';
 import { caseService } from '../services/caseService';
 import { connectWallet, signMessage } from '../utils/web3';
+import EvidenceViewer from '../components/EvidenceViewer';
+import type { Database } from '../lib/supabase';
+
+type EvidenceRecord = Database['public']['Tables']['evidence_records']['Row'];
 
 export default function Dashboard() {
   const { evidence, loading: evidenceLoading } = useRealtimeEvidence();
@@ -13,6 +17,8 @@ export default function Dashboard() {
   const [showEvidenceForm, setShowEvidenceForm] = useState(false);
   const [showCaseForm, setShowCaseForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedEvidence, setSelectedEvidence] = useState<EvidenceRecord | null>(null);
+  const [showEvidenceViewer, setShowEvidenceViewer] = useState(false);
 
   const [newEvidence, setNewEvidence] = useState({
     name: '',
@@ -26,6 +32,11 @@ export default function Dashboard() {
     title: '',
     description: '',
   });
+
+  const handleViewEvidence = (evidenceItem: EvidenceRecord) => {
+    setSelectedEvidence(evidenceItem);
+    setShowEvidenceViewer(true);
+  };
 
   const handleEvidenceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,6 +226,13 @@ export default function Dashboard() {
                               </div>
                             </div>
                           </div>
+                          <button
+                            onClick={() => handleViewEvidence(item)}
+                            className="ml-4 bg-blue-100 text-blue-700 px-3 py-2 rounded-md hover:bg-blue-200 transition-colors flex items-center gap-2"
+                          >
+                            <Eye className="h-4 w-4" />
+                            View Details
+                          </button>
                         </div>
                       </motion.div>
                     ))}
@@ -444,6 +462,18 @@ export default function Dashboard() {
               </motion.div>
             )}
           </div>
+        )}
+
+        {/* Evidence Viewer Modal */}
+        {selectedEvidence && (
+          <EvidenceViewer
+            evidence={selectedEvidence}
+            isOpen={showEvidenceViewer}
+            onClose={() => {
+              setShowEvidenceViewer(false);
+              setSelectedEvidence(null);
+            }}
+          />
         )}
       </div>
     </div>
