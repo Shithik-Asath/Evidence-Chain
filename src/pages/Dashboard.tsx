@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { Upload, File, Plus, Search, Calendar, Hash, User } from 'lucide-react';
+import { Upload, File, Plus, Search, Calendar, Hash, User, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useEvidence } from '../hooks/useEvidence';
-import { useCases } from '../hooks/useCases';
+import { useRealtimeEvidence, useRealtimeCases } from '../hooks/useRealtime';
+import { evidenceService } from '../services/evidenceService';
+import { caseService } from '../services/caseService';
 import { connectWallet, signMessage } from '../utils/web3';
 
 export default function Dashboard() {
-  const { evidence, loading: evidenceLoading, submitEvidence } = useEvidence();
-  const { cases, loading: casesLoading, createCase } = useCases();
+  const { evidence, loading: evidenceLoading } = useRealtimeEvidence();
+  const { cases, loading: casesLoading } = useRealtimeCases();
   const [activeTab, setActiveTab] = useState<'evidence' | 'cases'>('evidence');
   const [showEvidenceForm, setShowEvidenceForm] = useState(false);
   const [showCaseForm, setShowCaseForm] = useState(false);
@@ -44,8 +45,8 @@ export default function Dashboard() {
       // Create mock transaction hash (in production, submit to blockchain)
       const mockTxHash = `0x${Math.random().toString(16).substr(2, 64)}`;
 
-      // Submit to database
-      await submitEvidence({
+      // Submit to database (real-time updates will handle UI refresh)
+      await evidenceService.submitEvidence({
         ipfs_hash: mockIpfsHash,
         metadata: {
           name: newEvidence.name,
@@ -63,7 +64,7 @@ export default function Dashboard() {
       setNewEvidence({ name: '', description: '', type: 'document', file: null });
       setShowEvidenceForm(false);
       
-      alert('Evidence submitted successfully!');
+      alert('Evidence submitted successfully! Real-time updates enabled.');
     } catch (error) {
       console.error('Error submitting evidence:', error);
       alert('Failed to submit evidence. Please try again.');
@@ -77,10 +78,11 @@ export default function Dashboard() {
     setIsSubmitting(true);
 
     try {
-      await createCase(newCase);
+      // Submit to database (real-time updates will handle UI refresh)
+      await caseService.createCase(newCase);
       setNewCase({ case_number: '', title: '', description: '' });
       setShowCaseForm(false);
-      alert('Case created successfully!');
+      alert('Case created successfully! Real-time updates enabled.');
     } catch (error) {
       console.error('Error creating case:', error);
       alert('Failed to create case. Please try again.');
@@ -97,8 +99,16 @@ export default function Dashboard() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-white rounded-lg shadow-lg p-6 mb-8"
         >
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Evidence Chain Dashboard</h1>
-          <p className="text-gray-600">Manage evidence records and cases securely on the blockchain</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Evidence Chain Dashboard</h1>
+              <p className="text-gray-600">Manage evidence records and cases securely on the blockchain</p>
+            </div>
+            <div className="flex items-center gap-2 text-green-600">
+              <RefreshCw className="h-5 w-5" />
+              <span className="text-sm font-medium">Real-time Updates Active</span>
+            </div>
+          </div>
         </motion.div>
 
         {/* Tab Navigation */}
@@ -140,7 +150,13 @@ export default function Dashboard() {
                 className="bg-white rounded-lg shadow-lg p-6"
               >
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-xl font-semibold">Evidence Records</h3>
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-xl font-semibold">Evidence Records</h3>
+                    <div className="flex items-center gap-1 text-green-600">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-xs">Live</span>
+                    </div>
+                  </div>
                   <button
                     onClick={() => setShowEvidenceForm(true)}
                     className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -159,11 +175,17 @@ export default function Dashboard() {
                   <div className="text-center py-8">
                     <File className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600">No evidence records found</p>
+                    <p className="text-sm text-gray-500 mt-2">Submit your first evidence to get started</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {evidence.map((item) => (
-                      <div key={item.id} className="border border-gray-200 p-4 rounded-lg hover:shadow-md transition-shadow">
+                      <motion.div
+                        key={item.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="border border-gray-200 p-4 rounded-lg hover:shadow-md transition-shadow"
+                      >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <h4 className="font-semibold text-lg text-gray-900">
@@ -194,7 +216,7 @@ export default function Dashboard() {
                             </div>
                           </div>
                         </div>
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
                 )}
@@ -291,7 +313,13 @@ export default function Dashboard() {
                 className="bg-white rounded-lg shadow-lg p-6"
               >
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-xl font-semibold">Case Records</h3>
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-xl font-semibold">Case Records</h3>
+                    <div className="flex items-center gap-1 text-green-600">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-xs">Live</span>
+                    </div>
+                  </div>
                   <button
                     onClick={() => setShowCaseForm(true)}
                     className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -310,11 +338,17 @@ export default function Dashboard() {
                   <div className="text-center py-8">
                     <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600">No case records found</p>
+                    <p className="text-sm text-gray-500 mt-2">Create your first case to get started</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {cases.map((caseItem) => (
-                      <div key={caseItem.id} className="border border-gray-200 p-4 rounded-lg hover:shadow-md transition-shadow">
+                      <motion.div
+                        key={caseItem.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="border border-gray-200 p-4 rounded-lg hover:shadow-md transition-shadow"
+                      >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
@@ -338,7 +372,7 @@ export default function Dashboard() {
                             </div>
                           </div>
                         </div>
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
                 )}
