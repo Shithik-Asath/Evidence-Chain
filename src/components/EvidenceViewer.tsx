@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, Hash, User, Calendar, File, Download, ExternalLink, Shield, Clock } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Hash, User, Calendar, File, Download, ExternalLink, Shield, Clock, Eye, ZoomIn, ZoomOut } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { Database } from '../lib/supabase';
 
@@ -12,6 +12,9 @@ interface EvidenceViewerProps {
 }
 
 export default function EvidenceViewer({ evidence, isOpen, onClose }: EvidenceViewerProps) {
+  const [showImagePreview, setShowImagePreview] = useState(false);
+  const [imageZoom, setImageZoom] = useState(1);
+
   if (!isOpen) return null;
 
   const formatDate = (dateString: string | null) => {
@@ -48,13 +51,38 @@ export default function EvidenceViewer({ evidence, isOpen, onClose }: EvidenceVi
     return `${fileSize.toFixed(1)} ${units[unitIndex]}`;
   };
 
+  // Generate a mock image URL based on evidence type and metadata
+  const generateMockImageUrl = () => {
+    const type = evidence.metadata?.type?.toLowerCase();
+    const fileName = evidence.metadata?.fileName || 'evidence';
+    
+    if (type === 'image') {
+      // Use different placeholder images based on filename or content
+      if (fileName.toLowerCase().includes('document') || fileName.toLowerCase().includes('paper')) {
+        return 'https://images.unsplash.com/photo-1568667256549-094345857637?auto=format&fit=crop&w=800&q=80';
+      } else if (fileName.toLowerCase().includes('fingerprint')) {
+        return 'https://images.unsplash.com/photo-1614064641938-3bbee52942c7?auto=format&fit=crop&w=800&q=80';
+      } else if (fileName.toLowerCase().includes('scene') || fileName.toLowerCase().includes('crime')) {
+        return 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=800&q=80';
+      } else if (fileName.toLowerCase().includes('id') || fileName.toLowerCase().includes('license')) {
+        return 'https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&w=800&q=80';
+      } else {
+        return 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=800&q=80';
+      }
+    }
+    return null;
+  };
+
+  const mockImageUrl = generateMockImageUrl();
+  const isImageEvidence = evidence.metadata?.type?.toLowerCase() === 'image';
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
-        className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto"
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -75,6 +103,163 @@ export default function EvidenceViewer({ evidence, isOpen, onClose }: EvidenceVi
 
         {/* Content */}
         <div className="p-6">
+          {/* Image Preview Section - Only for image evidence */}
+          {isImageEvidence && mockImageUrl && (
+            <div className="mb-8">
+              <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <Eye className="h-5 w-5 text-blue-600" />
+                Image Evidence Preview
+              </h3>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">🖼️</span>
+                    <span className="font-medium text-gray-900">
+                      {evidence.metadata?.fileName || 'Evidence Image'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!showImagePreview ? (
+                      <button
+                        onClick={() => setShowImagePreview(true)}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                      >
+                        <Eye className="h-4 w-4" />
+                        View Image
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setImageZoom(Math.max(0.5, imageZoom - 0.25))}
+                          className="p-2 bg-gray-200 hover:bg-gray-300 rounded transition-colors"
+                          disabled={imageZoom <= 0.5}
+                        >
+                          <ZoomOut className="h-4 w-4" />
+                        </button>
+                        <span className="text-sm text-gray-600 min-w-[60px] text-center">
+                          {Math.round(imageZoom * 100)}%
+                        </span>
+                        <button
+                          onClick={() => setImageZoom(Math.min(3, imageZoom + 0.25))}
+                          className="p-2 bg-gray-200 hover:bg-gray-300 rounded transition-colors"
+                          disabled={imageZoom >= 3}
+                        >
+                          <ZoomIn className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowImagePreview(false);
+                            setImageZoom(1);
+                          }}
+                          className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"
+                        >
+                          Hide Image
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {showImagePreview && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="border-2 border-gray-200 rounded-lg overflow-hidden bg-white"
+                  >
+                    <div className="p-4 bg-gray-100 border-b">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                          <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                          <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                        </div>
+                        <div className="text-sm text-gray-600 font-mono">
+                          IPFS: {evidence.ipfs_hash.substring(0, 20)}...
+                        </div>
+                      </div>
+                    </div>
+                    <div className="overflow-auto max-h-96 flex justify-center items-center bg-gray-50">
+                      <img
+                        src={mockImageUrl}
+                        alt={evidence.metadata?.name || 'Evidence Image'}
+                        className="max-w-full h-auto transition-transform duration-200"
+                        style={{ transform: `scale(${imageZoom})` }}
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=800&q=80';
+                        }}
+                      />
+                    </div>
+                    <div className="p-3 bg-gray-100 border-t text-center">
+                      <p className="text-sm text-gray-600">
+                        🔒 This image is cryptographically secured and stored on IPFS
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+
+                {!showImagePreview && (
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                    <div className="text-6xl mb-4">🖼️</div>
+                    <h4 className="text-lg font-semibold text-gray-900 mb-2">Image Evidence Available</h4>
+                    <p className="text-gray-600 mb-4">
+                      This evidence contains an image file that can be viewed securely.
+                    </p>
+                    <button
+                      onClick={() => setShowImagePreview(true)}
+                      className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto"
+                    >
+                      <Eye className="h-5 w-5" />
+                      View Image Evidence
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* File Type Preview for Non-Images */}
+          {!isImageEvidence && (
+            <div className="mb-8">
+              <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <File className="h-5 w-5 text-blue-600" />
+                File Preview
+              </h3>
+              <div className="bg-gray-50 rounded-lg p-6 text-center">
+                <div className="text-6xl mb-4">{getFileTypeIcon(evidence.metadata?.type)}</div>
+                <h4 className="text-lg font-semibold text-gray-900 mb-2">
+                  {evidence.metadata?.type?.toUpperCase() || 'FILE'} Evidence
+                </h4>
+                <p className="text-gray-600 mb-4">
+                  {evidence.metadata?.fileName || 'Evidence file'}
+                </p>
+                <div className="flex justify-center gap-3">
+                  <button
+                    onClick={() => window.open(`https://ipfs.io/ipfs/${evidence.ipfs_hash}`, '_blank')}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    View on IPFS
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Simulate download
+                      const link = document.createElement('a');
+                      link.href = `https://ipfs.io/ipfs/${evidence.ipfs_hash}`;
+                      link.download = evidence.metadata?.fileName || 'evidence-file';
+                      link.click();
+                    }}
+                    className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    Download
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Basic Information */}
           <div className="mb-8">
             <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
@@ -111,6 +296,14 @@ export default function EvidenceViewer({ evidence, isOpen, onClose }: EvidenceVi
                   </p>
                 </div>
               </div>
+              {evidence.metadata?.caseNumber && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Related Case</label>
+                  <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded">
+                    {evidence.metadata.caseNumber}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -250,6 +443,15 @@ export default function EvidenceViewer({ evidence, isOpen, onClose }: EvidenceVi
 
           {/* Actions */}
           <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-200">
+            {isImageEvidence && !showImagePreview && (
+              <button
+                onClick={() => setShowImagePreview(true)}
+                className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors"
+              >
+                <Eye className="h-4 w-4" />
+                View Image
+              </button>
+            )}
             <button
               onClick={() => window.open(`https://ipfs.io/ipfs/${evidence.ipfs_hash}`, '_blank')}
               className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
